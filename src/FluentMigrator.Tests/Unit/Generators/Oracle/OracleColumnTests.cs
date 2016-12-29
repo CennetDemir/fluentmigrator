@@ -59,7 +59,7 @@ namespace FluentMigrator.Tests.Unit.Generators.Oracle
             expression.SchemaName = "TestSchema";
 
             var result = Generator.Generate(expression);
-            result.ShouldBe("ALTER TABLE TestTable1 ADD TestColumn1 NVARCHAR2(5) NOT NULL");
+            result.ShouldBe("ALTER TABLE TestSchema.TestTable1 ADD TestColumn1 NVARCHAR2(5) NOT NULL");
         }
 
         [Test]
@@ -78,7 +78,7 @@ namespace FluentMigrator.Tests.Unit.Generators.Oracle
             expression.SchemaName = "TestSchema";
 
             var result = Generator.Generate(expression);
-            result.ShouldBe("ALTER TABLE TestTable1 ADD TestColumn1 NUMBER(19,2) NOT NULL");
+            result.ShouldBe("ALTER TABLE TestSchema.TestTable1 ADD TestColumn1 NUMBER(19,2) NOT NULL");
         }
 
         [Test]

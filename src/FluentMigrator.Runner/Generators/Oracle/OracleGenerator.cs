@@ -11,8 +11,6 @@ namespace FluentMigrator.Runner.Generators.Oracle
 {
     public class OracleGenerator : GenericGenerator
     {
-
-        
         public OracleGenerator()
             : base(new OracleColumn(new OracleQuoter()), new OracleQuoter(), new OracleDescriptionGenerator())
         {
@@ -158,15 +156,21 @@ namespace FluentMigrator.Runner.Generators.Oracle
         {
             var descriptionStatement = DescriptionGenerator.GenerateDescriptionStatement(expression);
 
-            if (string.IsNullOrEmpty(descriptionStatement))
-                return base.Generate(expression);
+            if (!string.IsNullOrEmpty(descriptionStatement))
+            {
 
-            var wrappedCreateColumnStatement = WrapStatementInExecuteImmediateBlock(base.Generate(expression));
+                var wrappedCreateColumnStatement = WrapStatementInExecuteImmediateBlock(base.Generate(expression));
 
-            var createColumnWithDescriptionBuilder = new StringBuilder(wrappedCreateColumnStatement);
-            createColumnWithDescriptionBuilder.Append(WrapStatementInExecuteImmediateBlock(descriptionStatement));
+                var createColumnWithDescriptionBuilder = new StringBuilder(wrappedCreateColumnStatement);
+                createColumnWithDescriptionBuilder.Append(WrapStatementInExecuteImmediateBlock(descriptionStatement));
 
-            return WrapInBlock(createColumnWithDescriptionBuilder.ToString());
+                return WrapInBlock(createColumnWithDescriptionBuilder.ToString());
+            }
+             
+            string errors = ValidateAdditionalFeatureCompatibility(expression.Column.AdditionalFeatures);
+            if (!string.IsNullOrEmpty(errors)) return errors;
+
+            return String.Format(AddColumn, ExpandTableName(Quoter.QuoteTableName(expression.SchemaName), Quoter.QuoteTableName(expression.TableName)), Column.Generate(expression.Column));
         }
 
         public override string Generate(AlterColumnExpression expression)
@@ -207,9 +211,35 @@ namespace FluentMigrator.Runner.Generators.Oracle
             return "INSERT ALL " + String.Join(" ", insertStrings.ToArray()) + " SELECT 1 FROM DUAL";
         }
 
+        public override string Generate(UpdateDataExpression expression)
+        {
+
+            List<string> updateItems = new List<string>();
+            List<string> whereClauses = new List<string>();
+
+            foreach (var item in expression.Set)
+            {
+                updateItems.Add(string.Format("{0} = {1}", Quoter.QuoteColumnName(item.Key), Quoter.QuoteValue(item.Value)));
+            }
+
+            if (expression.IsAllRows)
+            {
+                whereClauses.Add("1 = 1");
+            }
+            else
+            {
+                foreach (var item in expression.Where)
+                {
+                    whereClauses.Add(string.Format("{0} {1} {2}", Quoter.QuoteColumnName(item.Key),
+                                                   item.Value == null ? "IS" : "=", Quoter.QuoteValue(item.Value)));
+                }
+            }
+            return String.Format(UpdateData, ExpandTableName(Quoter.QuoteSchemaName(expression.SchemaName), Quoter.QuoteTableName(expression.TableName)), String.Join(", ", updateItems.ToArray()), String.Join(" AND ", whereClauses.ToArray()));
+        }
+
         public override string Generate(AlterDefaultConstraintExpression expression)
         {
-            return String.Format(AlterColumn, Quoter.QuoteTableName(expression.TableName), Column.Generate(new ColumnDefinition
+            return String.Format(AlterColumn, ExpandTableName(Quoter.QuoteTableName(expression.SchemaName),Quoter.QuoteTableName(expression.TableName)), Column.Generate(new ColumnDefinition
             {
                 ModificationType = ColumnModificationType.Alter,
                 Name = expression.ColumnName,
@@ -221,7 +251,7 @@ namespace FluentMigrator.Runner.Generators.Oracle
         {
             return Generate(new AlterDefaultConstraintExpression
             {
-                TableName = expression.TableName,
+                TableName = ExpandTableName(Quoter.QuoteTableName(expression.SchemaName),Quoter.QuoteTableName(expression.TableName)),
                 ColumnName = expression.ColumnName,
                 DefaultValue = null
             });
